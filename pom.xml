@@ -33,6 +33,11 @@
 			<artifactId>spring-boot-starter-security</artifactId>
 		</dependency>
 
+		<dependency>
+    		<groupId>org.springframework.boot</groupId>
+    		<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+		</dependency>
+
 		<!-- Bean validation for request DTOs (@NotBlank, @Valid, ...). -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -159,7 +164,10 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<configuration>
-					<argLine>-javaagent:${org.mockito:mockito-core:jar}</argLine>
+    				<argLine>-javaagent:${org.mockito:mockito-core:jar}</argLine>
+    				<environmentVariables>
+        				<AEGIS_JWT_SECRET>test-only-secret-change-me-0123456789abcdef</AEGIS_JWT_SECRET>
+    				</environmentVariables>
 				</configuration>
 			</plugin>
 		</plugins>
