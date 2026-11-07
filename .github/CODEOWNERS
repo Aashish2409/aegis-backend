@@ -1,0 +1,13 @@
+/src/main/java/com/aegis/auth/          @BedabrataBharadwaj
+/src/main/java/com/aegis/database/      @BedabrataBharadwaj
+/src/main/java/com/aegis/agents/        @shreyoshi2409
+/src/main/java/com/aegis/orchestrator/  @shreyoshi2409
+/src/main/java/com/aegis/cloud/         @shreyoshi2409
+/src/main/java/com/aegis/policy/        @amarpratapsingh
+/src/main/java/com/aegis/email/         @amarpratapsingh
+/src/main/java/com/aegis/audit/         @Aashish2409
+/src/main/java/com/aegis/pipeline/      @Aashish2409
+/src/main/java/com/aegis/review/        @Aashish2409
+/src/main/java/com/aegis/redteam/       @Aashish2409
+/src/main/java/com/aegis/common/        @Aashish2409 @BedabrataBharadwaj @shreyoshi2409 @amarpratapsingh
+/pom.xml                                @Aashish2409
