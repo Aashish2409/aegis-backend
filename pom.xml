@@ -80,6 +80,17 @@
 			<artifactId>spring-boot-starter-webmvc-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+
+		<!-- ArchUnit: architecture tests (see src/test/java/com/aegis/architecture).
+		     We use the plain "archunit" artifact on purpose and run the rules from
+		     normal JUnit Jupiter tests, so we do not depend on a separate ArchUnit
+		     JUnit engine that may lag behind Spring Boot's JUnit version. -->
+		<dependency>
+			<groupId>com.tngtech.archunit</groupId>
+			<artifactId>archunit</artifactId>
+			<version>1.4.1</version>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<!-- Imports Spring AI's bill of materials so all Spring AI artifacts
