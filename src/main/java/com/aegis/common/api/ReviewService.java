@@ -12,4 +12,20 @@ public interface ReviewService {
     ReviewItem queue(AgentAction action, UserContext requestedBy);
 
     List<ReviewItem> findAll();
+
+    default List<ReviewItem> findPending() {
+        return findAll().stream()
+                .filter(item -> item.status() == com.aegis.common.enums.ReviewStatus.PENDING)
+                .toList();
+    }
+
+    default java.util.Optional<ReviewItem> findById(String reviewId) {
+        return findAll().stream()
+                .filter(item -> item.reviewId().equals(reviewId))
+                .findFirst();
+    }
+
+    default ReviewItem updateStatus(String reviewId, com.aegis.common.enums.ReviewStatus status) {
+        throw new UnsupportedOperationException("updateStatus not implemented");
+    }
 }

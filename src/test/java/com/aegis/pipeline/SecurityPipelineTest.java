@@ -15,7 +15,7 @@ import com.aegis.common.enums.AgentType;
 import com.aegis.common.enums.DecisionType;
 import com.aegis.common.enums.ExecutionStatus;
 import com.aegis.common.enums.UserRole;
-import com.aegis.policy.StubPolicyService;
+// StubPolicyService removed in favor of test policy service
 import com.aegis.review.InMemoryReviewService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,9 +48,19 @@ class SecurityPipelineTest {
         return new SecurityPipeline(request -> agent, policy, List.of(executor), review, audit);
     }
 
+    private static PolicyService testPolicyService() {
+        return request -> {
+            String op = request.action().operation();
+            if (op != null && (op.equalsIgnoreCase("READ") || op.equalsIgnoreCase("SEARCH") || op.equalsIgnoreCase("REPORT"))) {
+                return PolicyResponse.allow("Operation allowed", "TEST-ALLOW");
+            }
+            return PolicyResponse.block("Operation blocked", "TEST-BLOCK");
+        };
+    }
+
     @Test
     void allowedActionIsExecutedAndAudited() {
-        SecurityPipeline pipeline = pipeline(new FakeAgent("READ"), new StubPolicyService());
+        SecurityPipeline pipeline = pipeline(new FakeAgent("READ"), testPolicyService());
 
         AgentResponse response = pipeline.handle(AgentRequest.of("show IT employees", user));
 
@@ -62,7 +72,7 @@ class SecurityPipelineTest {
 
     @Test
     void blockedActionNeverReachesTheExecutor() {
-        SecurityPipeline pipeline = pipeline(new FakeAgent("DELETE"), new StubPolicyService());
+        SecurityPipeline pipeline = pipeline(new FakeAgent("DELETE"), testPolicyService());
 
         AgentResponse response = pipeline.handle(AgentRequest.of("delete everyone", user));
 
@@ -94,7 +104,7 @@ class SecurityPipelineTest {
                 throw new IllegalStateException("LLM is down");
             }
         };
-        SecurityPipeline pipeline = pipeline(brokenAgent, new StubPolicyService());
+        SecurityPipeline pipeline = pipeline(brokenAgent, testPolicyService());
 
         AgentResponse response = pipeline.handle(AgentRequest.of("anything", user));
 

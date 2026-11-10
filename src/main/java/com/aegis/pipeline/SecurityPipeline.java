@@ -13,9 +13,12 @@ import com.aegis.common.dto.AuditEvent;
 import com.aegis.common.dto.ExecutionResult;
 import com.aegis.common.dto.PolicyRequest;
 import com.aegis.common.dto.PolicyResponse;
+import com.aegis.common.dto.ReviewItem;
+import com.aegis.common.dto.UserContext;
 import com.aegis.common.enums.AgentType;
 import com.aegis.common.enums.DecisionType;
 import com.aegis.common.enums.ExecutionStatus;
+import com.aegis.common.enums.ReviewStatus;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -122,6 +125,73 @@ public class SecurityPipeline {
         DecisionType decision = (policy == null) ? null : policy.decision();
         return new AgentResponse(request.requestId(), ExecutionStatus.FAILED,
                 decision, "The request could not be processed.", null);
+    }
+
+    /**
+     * Resolves an action that was held for human review.
+     * Only the pipeline package may invoke execute() on a ToolExecutor.
+     */
+    public AgentResponse resolveReview(String reviewId, boolean approved, String reason, UserContext reviewer) {
+        ReviewItem item = reviewService.findById(reviewId)
+                .orElseThrow(() -> new IllegalArgumentException("Review item not found: " + reviewId));
+
+        if (item.status() != ReviewStatus.PENDING) {
+            throw new IllegalStateException("Review item is already resolved with status: " + item.status());
+        }
+
+        String safeReason = (reason == null || reason.isBlank()) ? "No reason provided" : reason.trim();
+        String reviewerId = (reviewer == null || reviewer.userId() == null) ? "anonymous" : reviewer.userId();
+
+        if (approved) {
+            reviewService.updateStatus(reviewId, ReviewStatus.APPROVED);
+            ToolExecutor executor = executors.get(item.action().agentType());
+            if (executor == null) {
+                throw new IllegalStateException("No executor for " + item.action().agentType());
+            }
+            ExecutionResult result = executor.execute(item.action());
+            auditService.record(new AuditEvent(
+                    UUID.randomUUID().toString(),
+                    Instant.now(),
+                    item.action().actionId(),
+                    reviewerId,
+                    item.action().agentId(),
+                    item.action().operation(),
+                    item.action().resource(),
+                    DecisionType.ALLOW,
+                    "Approved by reviewer (" + reviewerId + "): " + safeReason,
+                    "HUMAN-REVIEW",
+                    result.success() ? ExecutionStatus.EXECUTED : ExecutionStatus.FAILED
+            ));
+            return new AgentResponse(
+                    item.action().actionId(),
+                    result.success() ? ExecutionStatus.EXECUTED : ExecutionStatus.FAILED,
+                    DecisionType.ALLOW,
+                    result.success() ? "Action approved and executed." : "Action approved but execution failed: " + result.error(),
+                    result.data()
+            );
+        } else {
+            reviewService.updateStatus(reviewId, ReviewStatus.REJECTED);
+            auditService.record(new AuditEvent(
+                    UUID.randomUUID().toString(),
+                    Instant.now(),
+                    item.action().actionId(),
+                    reviewerId,
+                    item.action().agentId(),
+                    item.action().operation(),
+                    item.action().resource(),
+                    DecisionType.BLOCK,
+                    "Rejected by reviewer (" + reviewerId + "): " + safeReason,
+                    "HUMAN-REVIEW",
+                    ExecutionStatus.REJECTED
+            ));
+            return new AgentResponse(
+                    item.action().actionId(),
+                    ExecutionStatus.REJECTED,
+                    DecisionType.BLOCK,
+                    "Action rejected by reviewer: " + safeReason,
+                    null
+            );
+        }
     }
 
     /** Writes one audit event. action and policy can be null on early failures. */
