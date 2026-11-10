@@ -1,64 +1,96 @@
 package com.aegis.email;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-
-import java.util.Map;
-
-import org.junit.jupiter.api.Test;
-
 import com.aegis.common.api.LlmClient;
 import com.aegis.common.dto.AgentAction;
 import com.aegis.common.dto.AgentRequest;
 import com.aegis.common.dto.UserContext;
 import com.aegis.common.enums.AgentType;
 import com.aegis.common.enums.UserRole;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class EmailAgentTest {
 
-    private final UserContext user = new UserContext("u1", UserRole.USER);
+    private static final UserContext USER = new UserContext("u1", UserRole.USER);
 
     @Test
-    void proposesValidSendEmailAction() {
-        LlmClient mockLlm = (system, userMsg) -> """
-                {"operation":"SEND_EMAIL","resource":"emails","params":{"to":"bob@aegis.internal","subject":"Hello","body":"Work update"}}
+    void validProposalParsesCorrectly() {
+        String json = """
+                {
+                  "operation": "SEND_EMAIL",
+                  "resource": "email",
+                  "parameters": {
+                    "to": "bob@aegis.test",
+                    "subject": "Status Report",
+                    "body": "System is green."
+                  }
+                }
                 """;
-        EmailAgent agent = new EmailAgent(mockLlm);
-        AgentAction action = agent.propose(AgentRequest.of("send an email to bob", user));
+        LlmClient llm = (system, user) -> json;
+        EmailAgent agent = new EmailAgent(llm);
 
-        assertEquals("SEND_EMAIL", action.operation());
-        assertEquals("emails", action.resource());
+        AgentAction action = agent.propose(AgentRequest.of("send report to bob", USER));
+
+        assertNotNull(action);
         assertEquals(AgentType.EMAIL, action.agentType());
-        assertEquals("bob@aegis.internal", action.parameters().get("to"));
-        assertEquals("Hello", action.parameters().get("subject"));
+        assertEquals(EmailAgent.AGENT_ID, action.agentId());
+        assertEquals("SEND_EMAIL", action.operation());
+        assertEquals("email", action.resource());
+        assertEquals("bob@aegis.test", action.parameters().get("to"));
+        assertEquals("Status Report", action.parameters().get("subject"));
+        assertEquals("System is green.", action.parameters().get("body"));
     }
 
     @Test
-    void proposesValidReadAction() {
-        LlmClient mockLlm = (system, userMsg) -> """
-                {"operation":"READ","resource":"emails","params":{}}
+    void malformedJsonThrowsException() {
+        LlmClient llm = (system, user) -> "{not valid json}";
+        EmailAgent agent = new EmailAgent(llm);
+
+        assertThrows(EmailProposalException.class, () ->
+                agent.propose(AgentRequest.of("send email", USER)));
+    }
+
+    @Test
+    void blankLlmResponseThrowsException() {
+        LlmClient llm = (system, user) -> "   ";
+        EmailAgent agent = new EmailAgent(llm);
+
+        assertThrows(EmailProposalException.class, () ->
+                agent.propose(AgentRequest.of("send email", USER)));
+    }
+
+    @Test
+    void unexpectedFieldThrowsException() {
+        String json = """
+                {
+                  "operation": "SEND_EMAIL",
+                  "resource": "email",
+                  "unexpected_admin_flag": true,
+                  "parameters": {}
+                }
                 """;
-        EmailAgent agent = new EmailAgent(mockLlm);
-        AgentAction action = agent.propose(AgentRequest.of("read my emails", user));
+        LlmClient llm = (system, user) -> json;
+        EmailAgent agent = new EmailAgent(llm);
 
-        assertEquals("READ", action.operation());
-        assertEquals("emails", action.resource());
+        assertThrows(EmailProposalException.class, () ->
+                agent.propose(AgentRequest.of("send email", USER)));
     }
 
     @Test
-    void malformedLlmResponseThrowsProposalException() {
-        LlmClient mockLlm = (system, userMsg) -> "not json at all";
-        EmailAgent agent = new EmailAgent(mockLlm);
+    void missingOperationThrowsException() {
+        String json = """
+                {
+                  "resource": "email",
+                  "parameters": {"to": "alice@aegis.test"}
+                }
+                """;
+        LlmClient llm = (system, user) -> json;
+        EmailAgent agent = new EmailAgent(llm);
 
-        assertThrows(EmailProposalException.class, () -> agent.propose(AgentRequest.of("hello", user)));
-    }
-
-    @Test
-    void emptyLlmResponseThrowsProposalException() {
-        LlmClient mockLlm = (system, userMsg) -> "";
-        EmailAgent agent = new EmailAgent(mockLlm);
-
-        assertThrows(EmailProposalException.class, () -> agent.propose(AgentRequest.of("hello", user)));
+        assertThrows(EmailProposalException.class, () ->
+                agent.propose(AgentRequest.of("send email", USER)));
     }
 }

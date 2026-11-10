@@ -1,5 +1,14 @@
 package com.aegis.email;
 
+import com.aegis.common.api.Agent;
+import com.aegis.common.api.LlmClient;
+import com.aegis.common.dto.AgentAction;
+import com.aegis.common.dto.AgentRequest;
+import com.aegis.common.enums.AgentType;
+import org.springframework.stereotype.Service;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.json.JsonMapper;
+
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -7,20 +16,11 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
-import org.springframework.stereotype.Service;
-
-import com.aegis.common.api.Agent;
-import com.aegis.common.api.LlmClient;
-import com.aegis.common.dto.AgentAction;
-import com.aegis.common.dto.AgentRequest;
-import com.aegis.common.enums.AgentType;
-
-import tools.jackson.databind.DeserializationFeature;
-import tools.jackson.databind.json.JsonMapper;
-
 /**
- * Email agent (owner: Amar). Proposes email-related operations.
- * Fails closed on any malformed LLM output.
+ * Email agent (owner: Amar).
+ *
+ * It only PROPOSES email actions; it NEVER executes or sends emails directly.
+ * Malformed LLM output -> EmailProposalException (pipeline fails closed).
  */
 @Service
 public class EmailAgent implements Agent {
@@ -29,14 +29,15 @@ public class EmailAgent implements Agent {
 
     private static final Pattern OPERATION_FORMAT = Pattern.compile("^[A-Z_]{1,32}$");
     private static final Pattern RESOURCE_FORMAT = Pattern.compile("^[a-z_]{1,64}$");
-    private static final Set<String> ALLOWED_TOP_LEVEL_KEYS = Set.of("operation", "resource", "filter", "params");
+    private static final Set<String> ALLOWED_TOP_LEVEL_KEYS = Set.of("operation", "resource", "parameters", "params");
     private static final int MAX_PARAMS = 10;
-    private static final int MAX_VALUE_LENGTH = 500;
+    private static final int MAX_PARAM_LENGTH = 1000;
 
     private static final String SYSTEM_PROMPT = """
             You are the Email Agent of Aegis. Convert the user's request into ONE JSON object and
             output nothing else (no markdown, no explanation).
-            Format: {"operation":"SEND_EMAIL|READ|SEARCH|REPORT","resource":"emails","params":{"to":"alice@example.com","subject":"Update","body":"Hello"}}
+            Format: {"operation":"SEND_EMAIL|READ|REPORT","resource":"email","parameters":{"to":"user@company.test","subject":"Subject","body":"Message body"}}
+            Parameters may include: to, subject, body.
             """;
 
     private final LlmClient llmClient;
@@ -65,6 +66,9 @@ public class EmailAgent implements Agent {
 
     @Override
     public AgentAction propose(AgentRequest request) {
+        if (request == null || request.message() == null || request.message().isBlank()) {
+            throw new EmailProposalException("Request or message is blank");
+        }
         String raw = llmClient.complete(SYSTEM_PROMPT, request.message());
         return parse(raw);
     }
@@ -81,7 +85,7 @@ public class EmailAgent implements Agent {
             throw new EmailProposalException("LLM response is not a valid JSON object");
         }
         if (root == null) {
-            throw new EmailProposalException("LLM response is not a JSON object");
+            throw new EmailProposalException("LLM response is null");
         }
 
         for (Object key : root.keySet()) {
@@ -92,19 +96,25 @@ public class EmailAgent implements Agent {
 
         String operation = requiredString(root, "operation").trim().toUpperCase(Locale.ROOT);
         if (!OPERATION_FORMAT.matcher(operation).matches()) {
-            throw new EmailProposalException("Malformed operation");
+            throw new EmailProposalException("Malformed operation: " + operation);
         }
 
         String resource = requiredString(root, "resource").trim().toLowerCase(Locale.ROOT);
         if (!RESOURCE_FORMAT.matcher(resource).matches()) {
-            throw new EmailProposalException("Malformed resource");
+            throw new EmailProposalException("Malformed resource: " + resource);
         }
 
-        Object paramsObj = root.get("params") != null ? root.get("params") : root.get("filter");
-        Map<String, Object> params = parseParams(paramsObj);
+        Object paramsObj = root.containsKey("parameters") ? root.get("parameters") : root.get("params");
+        Map<String, Object> parameters = parseParameters(paramsObj);
 
-        return new AgentAction(UUID.randomUUID().toString(), AgentType.EMAIL, AGENT_ID,
-                operation, resource, params);
+        return new AgentAction(
+                UUID.randomUUID().toString(),
+                AgentType.EMAIL,
+                AGENT_ID,
+                operation,
+                resource,
+                parameters
+        );
     }
 
     private static String requiredString(Map<?, ?> root, String field) {
@@ -115,24 +125,30 @@ public class EmailAgent implements Agent {
         return text;
     }
 
-    private static Map<String, Object> parseParams(Object paramsObj) {
+    private static Map<String, Object> parseParameters(Object paramsObj) {
         if (paramsObj == null) {
             return Map.of();
         }
         if (!(paramsObj instanceof Map<?, ?> map)) {
-            throw new EmailProposalException("params must be a JSON object");
+            throw new EmailProposalException("parameters must be a JSON object");
         }
         if (map.size() > MAX_PARAMS) {
-            throw new EmailProposalException("Too many params");
+            throw new EmailProposalException("Too many parameters");
         }
         Map<String, Object> result = new LinkedHashMap<>();
         for (Map.Entry<?, ?> entry : map.entrySet()) {
-            if (!(entry.getKey() instanceof String key) || key.isBlank()
-                    || !(entry.getValue() instanceof String value)
-                    || value.isBlank() || value.length() > MAX_VALUE_LENGTH) {
-                throw new EmailProposalException("Invalid parameter entry");
+            if (!(entry.getKey() instanceof String key) || key.isBlank()) {
+                throw new EmailProposalException("Invalid parameter key");
             }
-            result.put(key, value);
+            Object val = entry.getValue();
+            if (val == null) {
+                continue;
+            }
+            String strVal = val.toString();
+            if (strVal.length() > MAX_PARAM_LENGTH) {
+                throw new EmailProposalException("Parameter value too long for: " + key);
+            }
+            result.put(key, strVal);
         }
         return result;
     }
