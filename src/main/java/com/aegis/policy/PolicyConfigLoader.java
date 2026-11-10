@@ -39,6 +39,12 @@ public class PolicyConfigLoader {
                   - UPDATE
                   - DELETE
                   - SEND_EMAIL
+                  - LIST_FILES
+                  - VIEW_VM
+                  - UPLOAD
+                  - DOWNLOAD
+                  - TERMINATE_VM
+                  - ATTACK_PROBE
               REVIEWER:
                 allowed_operations:
                   - READ
@@ -46,11 +52,18 @@ public class PolicyConfigLoader {
                   - REPORT
                   - EXPORT
                   - SEND_EMAIL
+                  - LIST_FILES
+                  - VIEW_VM
+                  - DOWNLOAD
+                  - UPLOAD
               USER:
                 allowed_operations:
                   - READ
                   - SEARCH
                   - REPORT
+                  - LIST_FILES
+                  - VIEW_VM
+                  - DOWNLOAD
 
             agents:
               DATABASE:
@@ -63,9 +76,16 @@ public class PolicyConfigLoader {
                   - READ
                   - SEARCH
                   - REPORT
+                  - LIST_FILES
+                  - VIEW_VM
+                  - UPLOAD
+                  - DOWNLOAD
+                  - TERMINATE_VM
               EMAIL:
                 allowed_operations:
                   - READ
+                  - SEARCH
+                  - REPORT
                   - SEND_EMAIL
               RED_TEAM:
                 allowed_operations:
@@ -76,6 +96,7 @@ public class PolicyConfigLoader {
               - EXPORT
               - UPDATE
               - SEND_MASS_EMAIL
+              - TERMINATE_VM
 
             blocked:
               - DROP
